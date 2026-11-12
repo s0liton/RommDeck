@@ -95,7 +95,7 @@ RommDeck exposes a separate Web UI at http://your-deck-ip:8780 where you can acc
 
 ## Building (Where is the code?!)
 
-RommDeck is based on the codebase of my PS4/PS5 homebrew RomM client, [RommPS](https://github.com/s0liton/RommPS). If you want to build it yourself, that repo has everything you need to build for the Deck. I am working on splitting out the core code into it's own repo, so that will make things a bit more organized eventually.
+RommDeck is based on the codebase of my PS4/PS5 homebrew RomM client, [RommPS](https://github.com/s0liton/RommPS). If you want to build it yourself, that repo has everything you need to build for the Deck. I am working on splitting out the core code into its own repo, so that will make things a bit more organized eventually.
 
 ## Watch Development Progress
 
