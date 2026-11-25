@@ -1601,6 +1601,46 @@ function padLoop() {
 }
 requestAnimationFrame(padLoop);
 
+// A plugin hands over one game through a rommdeck:// URL: open its platform,
+// find its row and press its button, so the press lands on the game rather
+// than on the library's front page.
+function focusRom(id, tries) {
+  var el = document.querySelector('[data-rom="' + id + '"]');
+  if (el) {
+    el.scrollIntoView({ block: "center" });
+    // The game's own button, as if it had been pressed: a game that isn't here
+    // starts downloading. A game that is offers History and Remove instead,
+    // and neither is what the URL asked for, so that row only takes focus.
+    var dl = el.querySelector("button[data-dl]");
+    if (dl) { dl.focus({ preventScroll: true }); dl.click(); return; }
+    var other = el.querySelector("button");
+    if (other) other.focus({ preventScroll: true });
+    return;
+  }
+  // The list is fetched after the platform is opened, so the card can come late.
+  if ((tries || 0) < 30) setTimeout(function () { focusRom(id, (tries || 0) + 1); }, 400);
+}
+function openDeepLink(d) {
+  if (!d || !d.rom) return;
+  showTab("library");
+  var slug = (d.platform || "").toLowerCase();
+  var tries = 0;
+  // The platform list is fetched by the tab, so the card may not be there yet.
+  (function pick() {
+    var list = state.platforms || [];
+    var want = slug && list.filter(function (p) {
+      return String(p.slug).toLowerCase() === slug || String(p.fs_slug).toLowerCase() === slug;
+    })[0];
+    var card = want && document.querySelector('.plat[data-id="' + want.id + '"]');
+    if (!want || !card) {
+      if (tries++ < 25) return setTimeout(pick, 200);
+      return; // nothing to open: leave the library where it is
+    }
+    card.click();
+    focusRom(d.rom, 0);
+  })();
+}
+
 api("GET", "/api/status").then(function (s) {
   renderStatus(s);
   var t = "home"; try { t = localStorage.getItem("tab") || "home"; } catch (e) {}
@@ -1611,6 +1651,8 @@ api("GET", "/api/status").then(function (s) {
   api("GET", "/api/config").then(function (c) { $("wzInsecure").checked = !c.tls_verify; }).catch(function () {});
   loadCert();
   loadUpdate().then(function () { if (state.update && updBusy(state.update)) watchUpdate(); });
+  // After the first paint, so the library it navigates to is already mounted.
+  setTimeout(function () { api("GET", "/api/deeplink").then(openDeepLink).catch(function () {}); }, 300);
 }).catch(function () { $("conn").textContent = "Can't reach " + APP; });
 // Every 3 s, or 10 s on the PS4, whose browser is slow to redraw.
 (function next() { setTimeout(function () { poll(true); next(); }, poll.slow ? 10000 : 3000); })();
