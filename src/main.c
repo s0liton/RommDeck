@@ -14,6 +14,7 @@
 #include "config.h"
 #include "events.h"
 #include "covers.h"
+#include "deeplink.h"
 #include "detect.h"
 #include "http.h"
 #include "library.h"
@@ -64,6 +65,9 @@ static void *tile_thread(void *arg) {
 __attribute__((used)) static const char VERSION_TAG[] = "ROMM_SYNC_VERSION=" APP_VERSION "\n";
 
 static char g_crash_log[PATH_MAX_LEN];
+
+/* The URL this copy was started for, read once the log is open. */
+static const char *g_boot_url = NULL;
 
 /* If we end up here, something went very wrong. Leave a note in the log for
  * whoever reads it next (probably me). Only async-signal-safe calls allowed. */
@@ -140,6 +144,9 @@ static void *app_main(void *arg) {
     iso8601_utc(time(NULL), now_iso, sizeof now_iso);
     LOGI("%s %s (build %s) starting (%s), data dir %s", APP_NAME, APP_VERSION, APP_BUILD, plat_name(), plat_data_dir());
     LOGI("%s; clock %s; largest free block %d MB", about, now_iso, mem_largest_mb());
+    /* The URL this copy was started for, now that there is a log to say so in:
+     * the UI takes it as soon as it has painted. */
+    if (g_boot_url) deeplink_parse(g_boot_url);
     /* Jailbroken consoles kept offline often run with the clock at 1970, which
      * breaks HTTPS certificate checks and save timestamps. */
     if (time(NULL) < 1577836800) { /* 2020-01-01 */
@@ -305,7 +312,16 @@ static void *app_main(void *arg) {
     return NULL;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    /* A plugin's button in RomM hands the desktop a rommdeck:// URL, and the
+     * OS starts this copy with it as an argument. A copy that is already
+     * running is told over the API instead (POST /api/deeplink). */
+    for (int i = 1; i < argc; i++)
+        if (strstr(argv[i], "rommdeck://")) {
+            g_boot_url = argv[i];
+            break;
+        }
+
     /* GoldHEN runs payloads on its loader's thread, which can't take another
      * payload until main() returns, so there the app gets its own thread. */
     if (plat_info()->detach && thread_start(app_main, NULL) == 0) return 0;

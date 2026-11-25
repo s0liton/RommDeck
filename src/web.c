@@ -1,3 +1,4 @@
+#include "deeplink.h"
 #include "web.h"
 
 #include <arpa/inet.h>
@@ -1439,6 +1440,29 @@ static void route(request *r) {
         cJSON *j = library_collections(k, &refused, err, sizeof err);
         if (j) send_json(fd, 200, j);
         else send_error(fd, refused ? 403 : 502, err); /* 403: pair again */
+        return;
+    }
+    if (is_get && !strcmp(r->path, "/api/deeplink")) {
+        /* Taken, not read: the UI navigates to a game once, so a reload or a
+         * second tab doesn't yank it back there later. */
+        int rom = 0;
+        char name[256] = "", platform[64] = "";
+        deeplink_take(&rom, name, sizeof name, platform, sizeof platform);
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddNumberToObject(o, "rom", rom);
+        cJSON_AddStringToObject(o, "name", name);
+        cJSON_AddStringToObject(o, "platform", platform);
+        send_json(fd, 200, o);
+        return;
+    }
+    if (is_post && !strcmp(r->path, "/api/deeplink")) {
+        /* A running copy is told about a URL the OS started a second copy for. */
+        cJSON *j = body_json(r);
+        int rom = (int)jget_num(j, "rom", 0);
+        deeplink_set(rom, jget_str(j, "name", ""), jget_str(j, "platform", ""));
+        cJSON_Delete(j);
+        LOGI("deep link: rom %d queued by the API", rom);
+        send_json(fd, 200, cJSON_CreateObject());
         return;
     }
     if (is_get && !strcmp(r->path, "/api/roms")) {
