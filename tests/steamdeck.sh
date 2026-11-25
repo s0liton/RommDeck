@@ -890,4 +890,31 @@ for _ in $(seq 1 20); do since | grep -q "game lichii started" && break; sleep 0
 since | grep -q "game lichii started" || fail "Lichii running wasn't seen"
 rm -rf "$T/proc/4747"
 
+echo "23. deep link: the URL a plugin opens is taken once"
+post /api/deeplink '{"rom":11,"name":"Super Metroid","platform":"snes"}' >/dev/null
+first=$(curl -sf "$API/api/deeplink")
+[[ "$first" == *'"rom":11'* && "$first" == *'"platform":"snes"'* ]] || fail "the target didn't come back: $first"
+second=$(curl -sf "$API/api/deeplink")
+[[ "$second" == *'"rom":0'* ]] || fail "the target came back twice: $second"
+
+echo "24. the URL on the command line, as the OS hands it over: percent-decoded, and logged"
+# A copy of its own, on its own port, started the way the OS starts one: with
+# the URL as its argument. It borrows the paired settings so the API answers,
+# and is stopped well before its first sync.
+mkdir -p "$T/dl/home" "$T/dl/data" "$T/dl/proc"
+python3 -c "import json; c = json.load(open('$T/data/config.json')); c['web_port'] = $((API_PORT + 10)); print(json.dumps(c))" > "$T/dl/data/config.json"
+HOME="$T/dl/home" ROMM_SYNC_DATA="$T/dl/data" ROMM_SYNC_PROC="$T/dl/proc" ROMM_SYNC_NO_NOTIFY=1 \
+    "$BIN" "rommdeck://open?rom=11&platform=snes&name=Super%20Metroid" > "$T/dl/daemon.log" 2>&1 & DL=$!
+url=""
+for _ in $(seq 1 80); do
+    url=$(curl -sf "http://127.0.0.1:$((API_PORT + 10))/api/deeplink" 2>/dev/null) && break
+    sleep 0.25
+done
+kill "$DL" 2>/dev/null || true
+wait "$DL" 2>/dev/null || true
+[[ "$url" == *'"rom":11'* && "$url" == *'"name":"Super Metroid"'* && "$url" == *'"platform":"snes"'* ]] \
+    || fail "the URL on the command line didn't reach the UI: $url"
+grep -q "deep link: rom 11 Super Metroid" "$T/dl/data/romm-sync.log" 2>/dev/null \
+    || fail "the URL isn't in the log: $(cat "$T/dl/daemon.log" 2>/dev/null)"
+
 echo "PASS"
